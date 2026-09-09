@@ -27,7 +27,7 @@ struct AttributeHeaderRaw {
     uint8_t non_resident;
     uint8_t name_length;
     uint16_t name_offset;
-    uint16_t flags;
+    uint16_t flags;           // 0x0001 = Compressed
     uint16_t attribute_id;
 };
 
@@ -44,7 +44,7 @@ struct NonResidentAttrHeaderRaw {
     uint64_t start_vcn;
     uint64_t end_vcn;
     uint16_t data_runs_offset;
-    uint16_t compression_unit_size;
+    uint16_t compression_unit_size; // 2^n clusters (typically 4 -> 16 clusters)
     uint32_t padding;
     uint64_t allocated_size;
     uint64_t real_size;
@@ -54,7 +54,7 @@ struct NonResidentAttrHeaderRaw {
 
 struct DataRun {
     uint64_t length_in_clusters;
-    int64_t lcn_offset; // Relative to previous run; 0 = sparse
+    int64_t lcn_offset; // 0 = sparse
 };
 
 struct ParsedRecord {
@@ -63,6 +63,8 @@ struct ParsedRecord {
     std::string filename;
     bool is_directory = false;
     bool is_resident = true;
+    bool is_compressed = false;
+    uint16_t compression_unit = 0; // typically 4 (16 clusters)
     uint64_t file_size = 0;
     std::vector<uint8_t> resident_data;
     std::vector<DataRun> data_runs;
