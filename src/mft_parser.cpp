@@ -19,7 +19,7 @@ bool MFTParser::apply_fixup(uint8_t* buffer, size_t record_size) {
         uint16_t* sector_fixup_pos = reinterpret_cast<uint16_t*>(buffer + sector_end);
 
         if (*sector_fixup_pos != check_val) {
-            return false; // Fixup error / bad sector
+            return false;
         }
 
         uint16_t replacement = *reinterpret_cast<uint16_t*>(buffer + usa_offset + (i * 2));
@@ -39,7 +39,7 @@ std::string MFTParser::utf16le_to_utf8(const uint16_t* str, size_t len) {
             out.push_back(static_cast<char>(0xC0 | (c >> 6)));
             out.push_back(static_cast<char>(0x80 | (c & 0x3F)));
         } else {
-            out.push_back('?'); // Simplified encoding fallback
+            out.push_back('?');
         }
     }
     return out;
@@ -67,7 +67,6 @@ std::vector<DataRun> MFTParser::parse_data_runs(const uint8_t* run_ptr, size_t m
             for (int i = 0; i < off_bytes; ++i) {
                 run_offset |= static_cast<int64_t>(run_ptr[idx++]) << (i * 8);
             }
-            // Sign extension
             if (run_ptr[idx - 1] & 0x80) {
                 for (int i = off_bytes; i < 8; ++i) {
                     run_offset |= (static_cast<int64_t>(0xFF) << (i * 8));
@@ -75,7 +74,6 @@ std::vector<DataRun> MFTParser::parse_data_runs(const uint8_t* run_ptr, size_t m
             }
             prev_lcn += run_offset;
         } else {
-            // Sparse cluster run
             prev_lcn = 0;
         }
 
@@ -111,11 +109,15 @@ ParsedRecord MFTParser::parse_record(const uint8_t* buffer, size_t record_size) 
 
             uint8_t name_len = payload[0x40];
             uint8_t ns = payload[0x41];
-            if (ns != 2 || rec.filename.empty()) { // Prefer Win32 / POSIX over DOS 8.3
+            if (ns != 2 || rec.filename.empty()) {
                 const uint16_t* name_ptr = reinterpret_cast<const uint16_t*>(payload + 0x42);
                 rec.filename = utf16le_to_utf8(name_ptr, name_len);
             }
         } else if (attr->type == 0x80) { // $DATA
+            if ((attr->flags & 0x0001) != 0) {
+                rec.is_compressed = true;
+            }
+
             if (attr->non_resident == 0) {
                 auto* res = reinterpret_cast<ResidentAttrHeaderRaw*>(attr);
                 rec.is_resident = true;
@@ -126,6 +128,10 @@ ParsedRecord MFTParser::parse_record(const uint8_t* buffer, size_t record_size) 
                 auto* non_res = reinterpret_cast<NonResidentAttrHeaderRaw*>(attr);
                 rec.is_resident = false;
                 rec.file_size = non_res->real_size;
+                rec.compression_unit = non_res->compression_unit_size;
+                if (rec.compression_unit > 0) {
+                    rec.is_compressed = true;
+                }
                 const uint8_t* run_ptr = work_buf.data() + offset + non_res->data_runs_offset;
                 size_t max_run_bytes = attr->length - non_res->data_runs_offset;
                 rec.data_runs = parse_data_runs(run_ptr, max_run_bytes);
