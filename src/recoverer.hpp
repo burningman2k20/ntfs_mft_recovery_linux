@@ -31,7 +31,12 @@ public:
     const std::unordered_map<uint64_t, ParsedRecord>& get_records() const { return records_; }
     const std::unordered_map<uint64_t, std::vector<uint64_t>>& get_tree() const { return tree_; }
 
+    static bool decompress_lznt1(const uint8_t* src, size_t src_len, uint8_t* dst, size_t dst_len);
+
 private:
+    bool extract_compressed_nonresident(const ParsedRecord& rec, std::ofstream& out);
+    bool extract_uncompressed_nonresident(const ParsedRecord& rec, std::ofstream& out);
+
     int fd_ = -1;
     uint64_t partition_offset_ = 0;
     uint32_t cluster_size_ = 4096;
